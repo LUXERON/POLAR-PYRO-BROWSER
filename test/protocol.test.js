@@ -1,5 +1,5 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {navigationRequest,normalizeUrl} from '../web/protocol.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {navigationRequest,normalizeUrl,snapshotRequest} from '../web/protocol.js';
 test('admits https and rejects URL credentials',()=>{assert.equal(normalizeUrl('example.com'),'https://example.com/');assert.throws(()=>normalizeUrl('https://u:p@example.com'),/credentials/)});
 test('loopback needs an explicit grant',()=>{assert.throws(()=>normalizeUrl('http://127.0.0.1:4173'),/grant/);assert.equal(normalizeUrl('http://127.0.0.1:4173',{localPreviewGranted:true}),'http://127.0.0.1:4173/')});
 test('request is host-bound',()=>{assert.throws(()=>navigationRequest('example.com',{}),/context/);const value=navigationRequest('example.com',{requestId:'r',projectId:'p',sessionId:'s'});assert.equal(value.capability_id,'browser.navigate');assert.equal(value.project_id,'p')});
-
+test('snapshot request is host-bound and observational',()=>{const value=snapshotRequest('https://example.com',{requestId:'r',projectId:'p',sessionId:'s'});assert.equal(value.capability_id,'browser.snapshot');assert.deepEqual(value.payload,{url:'https://example.com/'})});

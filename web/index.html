@@ -1,5 +1,38 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Polar Browser</title><style>
 :root{color-scheme:dark;font-family:Inter,system-ui;background:#040611;color:#dce8f8}*{box-sizing:border-box}body{margin:0;height:100vh;display:grid;grid-template-rows:auto auto 1fr}.bar{display:grid;grid-template-columns:auto 1fr auto;gap:8px;padding:10px;background:#0a0d1e;border-bottom:1px solid #20263b}button,input{font:inherit}input{min-width:0;padding:9px 12px;border:1px solid #27314e;border-radius:7px;color:inherit;background:#03050d}button{padding:8px 12px;border:1px solid #29334e;border-radius:7px;color:#9eeeff;background:#11162a}.receipt{min-height:28px;padding:6px 12px;color:#75e6ff;background:#070a17;font-size:12px}.receipt[data-status="FAIL"],.receipt[data-status="NO_RESULT"]{color:#ffb08f}.stage{display:grid;place-items:stretch;padding:14px}.stage>iframe{width:100%;height:100%;border:1px solid #27314e;border-radius:8px;background:white}.empty{place-self:center;text-align:center;color:#73809a}.empty b{display:block;margin-bottom:8px;color:#e9f4ff}
 </style></head><body><form class="bar" id="nav"><span>◎</span><input id="url" aria-label="Address" placeholder="https://example.com"><button>Request navigation</button></form><output class="receipt" aria-live="polite">Waiting for host binding…</output><main class="stage"><div class="empty"><b>Brokered browser surface</b>The plugin requests navigation; the host admits only the registered project preview origin.</div></main><script type="module">
-import {navigationRequest,PLUGIN_ID} from './protocol.js';const form=document.querySelector('#nav'),input=document.querySelector('#url'),stage=document.querySelector('.stage'),status=document.querySelector('output');let context=null,pending='',autoTimer,autoKey='';function requestNavigation(value){const request=navigationRequest(value,context);pending=request.request_id;status.textContent='Requesting admission…';parent.postMessage(request,'*')}parent.postMessage({schema_version:'polar.ui-ready/v1',plugin_id:PLUGIN_ID},'*');addEventListener('message',event=>{const data=event.data;if(data?.plugin_id!==PLUGIN_ID)return;if(data.schema_version==='polar.ui-context/v1'){context=data.context;if(!input.value&&context.initialPreviewUrl)input.value=context.initialPreviewUrl;status.textContent=context.projectId?'Host bound':'Waiting for project binding…';const key=`${context.requestId}:${context.initialPreviewUrl??''}`;if(context.projectId&&context.initialPreviewUrl&&key!==autoKey){clearTimeout(autoTimer);autoTimer=setTimeout(()=>{try{autoKey=key;requestNavigation(context.initialPreviewUrl)}catch(error){status.dataset.status='FAIL';status.textContent=error.message}},100)}return}if(data.schema_version!=='polar.ui-response/v1'||data.request_id!==pending)return;status.dataset.status=data.status;if(data.status!=='PASS'){status.textContent=data.error??data.status;return}const admitted=data.output?.admitted_url;if(typeof admitted!=='string'){status.dataset.status='FAIL';status.textContent='Host receipt omitted admitted_url';return}const target=new URL(admitted);if(target.origin===location.origin){status.dataset.status='FAIL';status.textContent='Preview origin must differ from plugin origin';return}status.textContent=`PASS · ${target.origin}`;stage.replaceChildren(Object.assign(document.createElement('iframe'),{src:target.href,title:'Admitted project preview'}));const frame=stage.querySelector('iframe');frame.setAttribute('sandbox','allow-scripts allow-forms allow-modals allow-same-origin');frame.referrerPolicy='no-referrer'});form.addEventListener('submit',event=>{event.preventDefault();try{requestNavigation(input.value)}catch(error){status.dataset.status='FAIL';status.textContent=error.message;parent.postMessage({schema_version:'polar.ui-error/v1',plugin_id:PLUGIN_ID,message:error.message},'*')}});
+import {navigationRequest,snapshotRequest,PLUGIN_ID} from './protocol.js';
+const form=document.querySelector('#nav'),input=document.querySelector('#url'),stage=document.querySelector('.stage'),status=document.querySelector('output');
+let context=null,pendingCapability='',autoTimer,autoKey='';
+function dispatch(request,label){pendingCapability=request.capability_id;status.textContent=label;parent.postMessage(request,'*')}
+function requestNavigation(value){dispatch(navigationRequest(value,context),'Requesting admission…')}
+function requestSnapshot(value){dispatch(snapshotRequest(value,context),'Preview admitted · qualifying Chrome snapshot…')}
+function renderPreview(admitted){
+  const target=new URL(admitted);
+  if(target.origin===location.origin)throw new Error('Preview origin must differ from plugin origin');
+  stage.replaceChildren(Object.assign(document.createElement('iframe'),{src:target.href,title:'Admitted project preview'}));
+  const frame=stage.querySelector('iframe');frame.setAttribute('sandbox','allow-scripts allow-forms allow-modals allow-same-origin');frame.referrerPolicy='no-referrer';
+  requestSnapshot(target.href);
+}
+parent.postMessage({schema_version:'polar.ui-ready/v1',plugin_id:PLUGIN_ID},'*');
+addEventListener('message',event=>{
+  const data=event.data;if(data?.plugin_id!==PLUGIN_ID)return;
+  if(data.schema_version==='polar.ui-context/v1'){
+    context=data.context;if(!input.value&&context.initialPreviewUrl)input.value=context.initialPreviewUrl;
+    status.textContent=context.projectId?'Host bound':'Waiting for project binding…';
+    const key=`${context.requestId}:${context.initialPreviewUrl??''}`;
+    if(context.projectId&&context.initialPreviewUrl&&key!==autoKey){clearTimeout(autoTimer);autoTimer=setTimeout(()=>{try{autoKey=key;requestNavigation(context.initialPreviewUrl)}catch(error){status.dataset.status='FAIL';status.textContent=error.message}},100)}return;
+  }
+  if(data.schema_version!=='polar.ui-response/v1'||data.request_id!==context?.requestId)return;
+  status.dataset.status=data.status;if(data.status!=='PASS'){status.textContent=data.error??data.status;return}
+  if(pendingCapability==='browser.navigate'){
+    const admitted=data.output?.admitted_url;if(typeof admitted!=='string'){status.dataset.status='FAIL';status.textContent='Host receipt omitted admitted_url';return}
+    try{renderPreview(admitted)}catch(error){status.dataset.status='FAIL';status.textContent=error.message}return;
+  }
+  if(pendingCapability==='browser.snapshot'){
+    const inspection=data.output?.inspection;if(!inspection||inspection.status!=='PASS'){status.dataset.status='FAIL';status.textContent='Inspection receipt was incomplete';return}
+    status.textContent=`PASS · Chrome ${inspection.server_info?.version??'unknown'} · ${inspection.snapshot_characters??0} chars · ${String(inspection.snapshot_sha256??'').slice(0,12)}`;
+  }
+});
+form.addEventListener('submit',event=>{event.preventDefault();try{requestNavigation(input.value)}catch(error){status.dataset.status='FAIL';status.textContent=error.message;parent.postMessage({schema_version:'polar.ui-error/v1',plugin_id:PLUGIN_ID,message:error.message},'*')}});
 </script></body></html>

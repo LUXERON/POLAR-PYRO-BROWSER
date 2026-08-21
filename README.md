@@ -8,7 +8,7 @@ Polar Pyro should be able to build a real application, start it in an isolated t
 
 ## Contract
 
-The package contributes a `session.tab` UI and emits only `browser.navigate` requests. Every request is bound to a host-issued request, project, and session ID. It cannot invoke Obscura or Chrome directly. The Polar Pyro host validates the manifest digest and URL policy, selects a qualified backend, attaches grants, invokes through its broker, and returns a typed receipt. The current production slice admits only the selected project's registered preview origin; arbitrary-web navigation remains fail-closed.
+The package contributes a `session.tab` UI and emits only `browser.navigate` and `browser.snapshot` requests. Every request is bound to a host-issued request, project, and session ID. It cannot invoke Obscura or Chrome directly. The Polar Pyro host validates the manifest digest and URL policy, selects a qualified backend, attaches grants, invokes through its broker, and returns a typed receipt. The current production slice admits only the selected project's registered preview origin; arbitrary-web navigation remains fail-closed.
 
 ```text
 Browser iframe → polar.ui-request/v1 → governed host
@@ -49,6 +49,10 @@ The package has no runtime dependencies. See [WHITEPAPER.md](WHITEPAPER.md) for 
 
 ## Live qualification — 2026-08-21
 
-The independently served Browser surface was mounted on a separate loopback origin inside the DE-PIN Polar Pyro host. Its automatic initial navigation crossed the source/origin/request/project/session validator, the Qwen host admitted the exact registered `http://127.0.0.1:5173/` project origin, and the external surface rendered the real DE-PIN application in a second sandboxed frame. An origin-escape URL and credential-bearing URL are rejected by host tests. This proves governed local project preview, not yet Chrome DevTools/Obscura inspection, arbitrary internet access, screenshots, journeys, or mutation authority.
+The independently served Browser surface was mounted on a separate loopback origin inside the DE-PIN Polar Pyro host. Its automatic initial navigation crossed the source/origin/request/project/session validator, the Qwen host admitted the exact registered `http://127.0.0.1:5173/` project origin, and the external surface rendered the real DE-PIN application in a second sandboxed frame. It then emitted a closed `browser.snapshot` request through the same broker. The host re-admitted the URL and launched `chrome-devtools-mcp@1.7.0` in isolated headless mode with telemetry and CrUX disabled, redacted network headers, a single allowed origin, no personal profile, and bounded time.
 
-Status: standalone surface, bound RPC, project-origin admission, typed receipt, and live nested preview are executable. Deep inspection and arbitrary-web backends remain fail-closed until their independent broker qualifications pass.
+The real Chromium qualification enumerated 29 MCP tools and produced a 1,599-character semantic snapshot with SHA-256 `806cdd94d46c984b566ef5630b91e0d666771b871529fc67db5ef9305632877a`; the tool-name catalog digest was `bb75ec786b617260552144cefa7db51dd507df9beaf5e73a672e64bdca7f1647`. The npm release is pinned to version `1.7.0`, upstream Git commit `774d78f5eef5e610407a0c92fa6ec5ed74b027e8`, and integrity `sha512-6xFW7oiUxTxZuHcfyYBkKQtmttjCbfifKZMSEk5CV8H2FucvKweYiJr8CblddYHtYjA4C14K9VAs1r49906RBA==`.
+
+An origin-escape URL and credential-bearing URL are rejected by host tests. This proves governed local project preview plus read-only DOM inspection. It does not authorize arbitrary internet access, a personal Chrome profile, screenshots, interactive journeys, downloads, or mutations.
+
+Status: standalone surface, bound RPC, project-origin admission, live nested preview, pinned Chrome MCP handshake, and hashed DOM snapshot receipt are executable. Performance/network/console inspection, Obscura, arbitrary-web navigation, interactive journeys, and mutations remain fail-closed until their independent broker qualifications pass.
