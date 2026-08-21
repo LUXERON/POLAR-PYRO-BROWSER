@@ -8,7 +8,7 @@ Polar Pyro should be able to build a real application, start it in an isolated t
 
 ## Contract
 
-The package contributes a `session.tab` UI and emits only `browser.navigate` requests. Every request is bound to a host-issued request, project, and session ID. It cannot invoke Obscura or Chrome directly. The Polar Pyro host validates the manifest digest and URL policy, selects a qualified backend, attaches grants, invokes through its broker, and returns a typed receipt.
+The package contributes a `session.tab` UI and emits only `browser.navigate` requests. Every request is bound to a host-issued request, project, and session ID. It cannot invoke Obscura or Chrome directly. The Polar Pyro host validates the manifest digest and URL policy, selects a qualified backend, attaches grants, invokes through its broker, and returns a typed receipt. The current production slice admits only the selected project's registered preview origin; arbitrary-web navigation remains fail-closed.
 
 ```text
 Browser iframe → polar.ui-request/v1 → governed host
@@ -47,5 +47,8 @@ The package has no runtime dependencies. See [WHITEPAPER.md](WHITEPAPER.md) for 
 6. Qualify Obscura and Chrome adapters with SSRF, injection, cookie and crash gauntlets.
 7. Deliver remote browser services through an authenticated MEC gateway over N3IWF/5GC while preserving the same grant/receipt semantics.
 
-Status: contract and standalone sandbox surface are executable; direct backend invocation is intentionally absent until broker qualification.
+## Live qualification — 2026-08-21
 
+The independently served Browser surface was mounted on a separate loopback origin inside the DE-PIN Polar Pyro host. Its automatic initial navigation crossed the source/origin/request/project/session validator, the Qwen host admitted the exact registered `http://127.0.0.1:5173/` project origin, and the external surface rendered the real DE-PIN application in a second sandboxed frame. An origin-escape URL and credential-bearing URL are rejected by host tests. This proves governed local project preview, not yet Chrome DevTools/Obscura inspection, arbitrary internet access, screenshots, journeys, or mutation authority.
+
+Status: standalone surface, bound RPC, project-origin admission, typed receipt, and live nested preview are executable. Deep inspection and arbitrary-web backends remain fail-closed until their independent broker qualifications pass.
